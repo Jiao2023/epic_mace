@@ -13,7 +13,7 @@ from chempropfix.features import BatchMolGraph, MolGraph
 from chempropfix.features import is_keeping_atom_map
 from chempropfix.features import is_explicit_h, is_reaction, is_adding_hs, is_mol,get_graph_cache_path
 from chempropfix.rdkit import make_mol
-
+ 
 import pdb
 import time
 import pickle
@@ -427,8 +427,7 @@ class MoleculeDataset(Dataset):
                                                   'per input (i.e., number_of_molecules = 1).')
                         str1 = '未使用cache中的数据'
                         if str1 == '未使用cache中的数据':
-                            return None
-                    
+                            print(str1)
                         poses = mol_to_geognn_graph_data_MMFF3d(m) #[[],[],[]]
                         mol_graph = MolGraph(m,
                                              d.atom_features, 
@@ -442,12 +441,14 @@ class MoleculeDataset(Dataset):
                     mol_graphs_list.append(mol_graph)
                 mol_graphs.append(mol_graphs_list)      
             # print(f'mol_graphs中mol_graph的数量是{len(mol_graphs)}')
+            """
             if get_graph_cache_path() is None:
                 print(f'SMILES_TO_GRAPH中数据的条数是:{len(SMILES_TO_GRAPH)}') 
                 cache_path = '/home/jiaopanyu/models/epic_coor_mace/cache/cache.pkl'
                 with open(cache_path, 'wb') as file:
                     pickle.dump(SMILES_TO_GRAPH, file)
                     print(f"saved{cache_path}")
+            """
             self._batch_graph = [BatchMolGraph([g[i] for g in mol_graphs]) for i in range(len(mol_graphs[0]))]
 
         return self._batch_graph

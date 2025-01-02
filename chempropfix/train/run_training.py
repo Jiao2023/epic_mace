@@ -46,7 +46,7 @@ def run_training(args: TrainArgs,
     else:
         debug = info = print
         
-    seed_torch(args.seed)
+    seed_torch(args.pytorch_seed)
     set_graph_cache_path(args.graph_cache_path)
     load_cache()
 
@@ -102,7 +102,7 @@ def run_training(args: TrainArgs,
                                                      split_type=args.split_type,
                                                      sizes=args.split_sizes,
                                                      key_molecule_index=args.split_key_molecule,
-                                                     seed=args.seed,
+                                                     seed=args.pytorch_seed,
                                                      num_folds=args.num_folds,
                                                      args=args,
                                                      logger=logger)
@@ -233,7 +233,7 @@ def run_training(args: TrainArgs,
         num_workers=num_workers,
         class_balance=args.class_balance,
         shuffle=True,
-        seed=args.seed
+        seed=args.pytorch_seed
     )
 
     val_data_loader = MoleculeDataLoader(

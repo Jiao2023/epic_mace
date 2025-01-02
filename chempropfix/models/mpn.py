@@ -25,7 +25,7 @@ from .layers import AttnEncoderXL, AttnEncoderADJ, ffn
 # from .graphformer import graphformerEncoder
 from typing import Any, List, Optional, Tuple,Final
 from torch import Tensor
-from torch_geometric.utils import cumsum, to_dense_batch, scatter
+from torch_geometric.utils import cumsum, to_dense_batch, scatter,add_self_loops
 from torch_geometric.typing import OptTensor
 import matplotlib.pyplot as plt
 from torch_geometric.nn import SAGPooling
@@ -54,7 +54,7 @@ from e3nn import o3
 from torch_geometric.nn.inits import glorot, zeros
 
 
-logging.basicConfig(filename="/home/jiaopanyu/4-result/train/model.log", level=logging.DEBUG,
+logging.basicConfig(filename="/data/4-result/model.log", level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 def visual_matrix(matrix,pth,idx,mtype=None,left=None,right=None):
@@ -137,9 +137,6 @@ def coord2radial(edge_index, coord,norm_diff):
         coord_diff = coord[row] - coord[col]
         radial = torch.sum((coord_diff)**2, 1).unsqueeze(1)
         if norm_diff:
-            mean = torch.mean(radial)
-            std = torch.std(radial)
-            radial  = (radial - mean)/std
             norm = torch.sqrt(radial) + 1
             coord_diff = coord_diff/(norm)
         return radial, coord_diff
@@ -200,8 +197,8 @@ class POLYGINConv(MessagePassing):
                  **kwargs):
         kwargs.setdefault('aggr', 'add')
         super().__init__(**kwargs)
-        self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=1,activation=activation)
-        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=1,activation=activation)
+        self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=3,activation=activation)
+        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=3,activation=activation)
         self.nn = nn
         self.initial_eps = eps
         self.layer_norm = pnn.norm.LayerNorm(in_channels,1e-7,mode='node')
@@ -214,15 +211,14 @@ class POLYGINConv(MessagePassing):
     def reset_parameters(self):
         super().reset_parameters()
         reset(self.nn)
-        pdb.set_trace()
-        reset(self.edge_mapper)
         self.eps.data.fill_(self.initial_eps)
        
-    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,edge_attr: Union[Tensor, OptPairTensor],poses,
+    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,edge_attr: Union[Tensor, OptPairTensor],
                 size: Size = None,batch =None,batch_size = None) -> Tensor:
       
         if isinstance(x, Tensor):
             x: OptPairTensor = (x, x)
+        
         out = self.propagate(edge_index,size=size,x=x,edge_attr=edge_attr) 
         x_r = x[1]
         if x_r is not None:
@@ -235,131 +231,6 @@ class POLYGINConv(MessagePassing):
         edge_attr = self.edge_mapper(edge_attr)
         x = self.residual_mapping(torch.concat((x_j,edge_attr),dim=-1)) 
         return x
-
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(nn={self.nn})'
-
-
-class MyConv(MessagePassing):
-    def __init__(self,in_channels,out_channels, nn: Callable, eps: float = 0., train_eps: bool = False, node_hidden: Optional[int] = None, edge_hidden: Optional[int] = None,activation:Callable=None,
-                 **kwargs):
-        kwargs.setdefault('aggr', 'add')
-        super().__init__(**kwargs)
-        if edge_hidden is not None:
-            self.edge_mapper = Linear(edge_hidden, edge_hidden, bias=False,
-                                    weight_initializer='glorot')
-            
-        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=1,activation=activation)
-        self.nn = nn
-        self.initial_eps = eps
-        self.layer_norm = pnn.norm.LayerNorm(in_channels,1e-7,mode='node')
-        if train_eps:
-            self.eps = torch.nn.Parameter(torch.empty(1))
-        else:
-            self.register_buffer('eps', torch.empty(1))
-        self.reset_parameters() 
-    def reset_parameters(self):
-        super().reset_parameters()
-        reset(self.nn)
-        self.eps.data.fill_(self.initial_eps)
-
-    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,edge_attr: Union[Tensor, OptPairTensor],poses,
-                size: Size = None,batch =None,batch_size = None) -> Tensor:
-      
-        if isinstance(x, Tensor):
-            x: OptPairTensor = (x, x)
-        out = self.propagate(edge_index,size=size,x=x,edge_attr=edge_attr) 
-        x_r = x[1]
-        if x_r is not None:
-            out = out + (1 + self.eps) * x_r
-        out = self.layer_norm(out)
-        out = self.nn(out)
-        return out
-    
-    def message(self, x_j: Tensor, edge_attr: Tensor) -> Tensor:
-        # x_j = self.node_mapper(x_j)
-        edge_attr = self.edge_mapper(edge_attr)
-        x = self.residual_mapping(torch.concat((x_j,edge_attr),dim=-1)) 
-        return x
-
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(nn={self.nn})'
-    
-class EpicEgnnConv(MessagePassing):
-    r"""The graph isomorphism operator from the `"How Powerful are
-    Graph Neural Networks?" <https://arxiv.org/abs/1810.00826>`_ paper
-
-    .. math::
-        \mathbf{x}^{\prime}_i = h_{\mathbf{\Theta}} \left( (1 + \epsilon) \cdot
-        \mathbf{x}_i + \sum_{j \in \mathcal{N}(i)} \mathbf{x}_j \right)
-
-    or
-
-    .. math::
-        \mathbf{X}^{\prime} = h_{\mathbf{\Theta}} \left( \left( \mathbf{A} +
-        (1 + \epsilon) \cdot \mathbf{I} \right) \cdot \mathbf{X} \right),
-
-    here :math:`h_{\mathbf{\Theta}}` denotes a neural network, *.i.e.* an MLP.
-
-    Args:
-        nn (torch.nn.Module): A neural network :math:`h_{\mathbf{\Theta}}` that
-            maps node features :obj:`x` of shape :obj:`[-1, in_channels]` to
-            shape :obj:`[-1, out_channels]`, *e.g.*, defined by
-            :class:`torch.nn.Sequential`.
-        eps (float, optional): (Initial) :math:`\epsilon`-value.
-            (default: :obj:`0.`)
-        train_eps (bool, optional): If set to :obj:`True`, :math:`\epsilon`
-            will be a trainable parameter. (default: :obj:`False`)
-        **kwargs (optional): Additional arguments of
-            :class:`torch_geometric.nn.conv.MessagePassing`.
-
-    Shapes:
-        - **input:**
-          node features :math:`(|\mathcal{V}|, F_{in})` or
-          :math:`((|\mathcal{V_s}|, F_{s}), (|\mathcal{V_t}|, F_{t}))`
-          if bipartite,
-          edge indices :math:`(2, |\mathcal{E}|)`
-        - **output:** node features :math:`(|\mathcal{V}|, F_{out})` or
-          :math:`(|\mathcal{V}_t|, F_{out})` if bipartite
-    """
-    def __init__(self,in_channels,out_channels, nn: Callable, eps: float = 0., train_eps: bool = False, node_hidden: Optional[int] = None, edge_hidden: Optional[int] = None,activation:Callable=None,
-                 **kwargs):
-        kwargs.setdefault('aggr', 'add')
-        super().__init__(**kwargs)
-        self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=1,activation=activation)
-        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=1,activation=activation)
-        self.nn = nn
-        self.initial_eps = eps
-        if train_eps:
-            self.eps = torch.nn.Parameter(torch.empty(1))
-        else:
-            self.register_buffer('eps', torch.empty(1))
-        self.reset_parameters()
-    
-    def reset_parameters(self):
-        super().reset_parameters()
-        reset(self.nn)
-        self.eps.data.fill_(self.initial_eps)
-
-    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,edge_attr: Union[Tensor, OptPairTensor],poses,
-                size: Size = None) -> Tensor:
-      
-        if isinstance(x, Tensor):
-            x: OptPairTensor = (x, x)
-        row, col = edge_index
-        radial, coord_diff = coord2radial(edge_index, poses,True)
-        edge_attr = torch.concat((edge_attr,radial),dim=1)
-        out = self.propagate(edge_index,size=size,x=x,edge_attr=edge_attr)
-
-        x_r = x[1]
-        if x_r is not None:
-            out = out + (1 + self.eps) * x_r
-        return self.nn(out)
-
-    def message(self, x_j: Tensor, edge_attr: Tensor) -> Tensor:
-        # x_j = self.node_mapper(x_j)
-        edge_attr = self.edge_mapper(edge_attr)
-        return self.residual_mapping(torch.concat((x_j,edge_attr),dim=-1))
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(nn={self.nn})'
@@ -410,55 +281,7 @@ class POLYGIN(BasicGNN):
             norm=self.norm,
             norm_kwargs=self.norm_kwargs,
         )
-        return POLYGINConv(in_channels,out_channels,mlp, **kwargs)
-    
-class EpicCoorEgnn(BasicGNN):
-    r"""The Graph Neural Network from the `"How Powerful are Graph Neural
-    Networks?" <https://arxiv.org/abs/1810.00826>`_ paper, using the
-    :class:`~torch_geometric.nn.GINConv` operator for message passing.
-
-    Args:
-        in_channels (int): Size of each input sample.
-        hidden_channels (int): Size of each hidden sample.
-        num_layers (int): Number of message passing layers.
-        out_channels (int, optional): If not set to :obj:`None`, will apply a
-            final linear transformation to convert hidden node embeddings to
-            output size :obj:`out_channels`. (default: :obj:`None`)
-        dropout (float, optional): Dropout probability. (default: :obj:`0.`)
-        act (str or Callable, optional): The non-linear activation function to
-            use. (default: :obj:`"relu"`)
-        act_first (bool, optional): If set to :obj:`True`, activation is
-            applied before normalization. (default: :obj:`False`)
-        act_kwargs (Dict[str, Any], optional): Arguments passed to the
-            respective activation function defined by :obj:`act`.
-            (default: :obj:`None`)
-        norm (str or Callable, optional): The normalization function to
-            use. (default: :obj:`None`)
-        norm_kwargs (Dict[str, Any], optional): Arguments passed to the
-            respective normalization function defined by :obj:`norm`.
-            (default: :obj:`None`)
-        jk (str, optional): The Jumping Knowledge mode. If specified, the model
-            will additionally apply a final linear transformation to transform
-            node embeddings to the expected output feature dimensionality.
-            (:obj:`None`, :obj:`"last"`, :obj:`"cat"`, :obj:`"max"`,
-            :obj:`"lstm"`). (default: :obj:`None`)
-        **kwargs (optional): Additional arguments of
-            :class:`torch_geometric.nn.conv.GINConv`.
-    """
-    supports_edge_weight: Final[bool] = False
-    supports_edge_attr: Final[bool] = True
-    supports_norm_batch: Final[bool]
-
-    def init_conv(self, in_channels: int, out_channels: int,
-                  **kwargs) -> MessagePassing:
-        mlp = MLP(
-            [in_channels,in_channels, out_channels],
-            act=self.act,
-            act_first=self.act_first,
-            norm=self.norm,
-            norm_kwargs=self.norm_kwargs,
-        )
-        return EpicEgnnConv(in_channels,out_channels,mlp, **kwargs)
+        return POLYGINConv(in_channels,out_channels,mlp, **kwargs)    
 
 class MPNEncoder(nn.Module):
     """An :class:`MPNEncoder` is a message passing neural network for encoding a molecule."""
@@ -858,90 +681,6 @@ class POLYGNN_adj(nn.Module):
     out = self.W_u(self.activation(torch.cat((out,X),dim=2))) * w 
     return out
 
-'''
-class GIN_adj(nn.Module):
-    def __init__(self, args, node_hidden, edge_hidden):
-        super(GIN_adj, self).__init__()
-        self.activation0 = get_activation_function(args.activation)
-        self.activation1 = get_activation_function(args.activation)
-        self.args = args
-        self.eps = torch.nn.Parameter(torch.zeros(1))
-        self.W_0 = nn.Linear(node_hidden, node_hidden)
-        self.W_1 = nn.Linear(node_hidden, node_hidden)
-        self.activation = get_activation_function(args.activation)
-        # below are GIN -> wDMPNN modify
-        if args.gin_mode in [4,5,6,7]:                      # 残差映射
-            # self.residual_mapping = nn.Linear(node_hidden,node_hidden)
-            self.residual_mapping = ffn(node_hidden, node_hidden,capacity=1,activation=self.activation)
-        if args.gin_mode in [1,3,5,7]:                      # 加边信息
-            # self.msg_mapping = nn.Linear(node_hidden+edge_hidden,node_hidden)
-            self.msg_mapping = ffn(node_hidden+edge_hidden, node_hidden,capacity=1,activation=self.activation)
-        
-        # below are GIN -> polyGNN modify
-        if args.gin_mode in [14,15,16,17]:
-            # self.edge_mapper = nn.Linear(edge_hidden,edge_hidden)
-            self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=1,activation=self.activation)
-        if args.gin_mode >= 10:
-            if args.gin_mode in [12,13,16,17]:
-                # self.residual_mapping = nn.Linear(2*node_hidden+edge_hidden,node_hidden)
-                self.residual_mapping = ffn(2*node_hidden+edge_hidden, node_hidden,capacity=0,activation=self.activation)
-            else:
-                # self.residual_mapping = nn.Linear(node_hidden+edge_hidden,node_hidden)
-                self.residual_mapping = ffn(node_hidden+edge_hidden, node_hidden,capacity=1,activation=self.activation)
-        if args.gin_mode in [11,13,15,17]:
-            # self.node_mapper = nn.Linear(node_hidden,node_hidden)
-            self.node_mapper = ffn(node_hidden, node_hidden,capacity=1,activation=self.activation)
-    
-    def forward(self, X, E, A, w):
-        # X [batch_size * node_size * node_hidden]
-        # E [batch_size * node_size * node_size * edge_hidden]
-        # A [batch_size * node_size * node_size]
-        # w [batch_size * node_size]
-        b = X.shape[0]
-        m = X.shape[1]
-        h = X.shape[2]
-        
-        if self.args.gin_mode < 10:                      # GIN -> wDMPNN
-            if self.args.gin_mode in [1,3,5,7]:             # 加边信息
-                msg = A.unsqueeze(3) * torch.cat((X.unsqueeze(2).expand(-1,-1,m,-1),E),dim=3)
-            else:
-                msg = A.unsqueeze(3) * X.unsqueeze(2).expand(-1,-1,m,-1)
-        else:                                            # GIN -> polyGNN
-            if self.args.gin_mode in [14,15,16,17]:
-                E = self.edge_mapper(E)
-            if self.args.gin_mode in [11,13,15,17]:
-                X = self.node_mapper(X)
-            msg = A.unsqueeze(3) * torch.cat((X.unsqueeze(2).expand(-1,-1,m,-1),E),dim=3)
-        
-        
-        msg = torch.sum(msg,dim=1)
-        
-        
-        # below are GIN -> wDMPNN modify
-        if self.args.gin_mode in [1,3,5,7]:             # 加边信息
-            msg = self.msg_mapping(msg)
-        
-        X = (1 + self.eps) * X
-        
-        # below are GIN -> wDMPNN modify
-        if self.args.gin_mode in [4,5,6,7]:             # 残差映射
-            X = self.residual_mapping(X)
-            
-        if self.args.gin_mode < 10:
-            out = X + msg
-        else:
-            if self.args.gin_mode in [12,13,16,17]:
-                out = self.residual_mapping(torch.cat((X,msg),dim=-1))
-            else:
-                out =  X + self.residual_mapping(msg)
-        
-        
-        out = self.W_0(out)
-        out = F.dropout(self.activation0(out), p=self.args.gnn_dropout, training=self.training)
-        out = self.W_1(out)
-        out = F.dropout(self.activation1(out), p=self.args.gnn_dropout, training=self.training)
-        return out * w
-'''
 class GIN_adj(nn.Module):
     def __init__(self, args, node_hidden, edge_hidden):
         super(GIN_adj, self).__init__()
@@ -1213,6 +952,7 @@ class pyG_helper(nn.Module):
         self.args = args
         self.encoder_type = args.encoder_type
         if self.args.encoder_type in ['epic_coor_mace_mlp']:
+            '''
             self.radial_embedding = RadialEmbeddingBlock(
                 r_max=args.r_max,
                 num_bessel=args.num_bessel,
@@ -1220,6 +960,7 @@ class pyG_helper(nn.Module):
                 radial_type=args.radial_type,
                 distance_transform=args.distance_transform,
             )
+            '''
             sh_irreps = o3.Irreps.spherical_harmonics(args.max_ell)
             self.spherical_harmonics = o3.SphericalHarmonics(
                 sh_irreps, normalize=True, normalization="component"
@@ -1227,12 +968,17 @@ class pyG_helper(nn.Module):
             ell = torch.arange(args.max_ell + 1) 
             veceij_dim = torch.sum(2 * ell + 1)  
             args.veceij_dim = args.veceij_dim if args.veceij_dim else veceij_dim.item()
-            args.leneij_dim = args.leneij_dim if args.leneij_dim else args.num_bessel
-            
-            self.veceij_mapper = ffn(veceij_dim.item(), args.veceij_dim, capacity=0,activation=get_activation_function(args.activation))
-            self.leneij_mapper = ffn(args.num_bessel, args.leneij_dim,capacity=0,activation=get_activation_function(args.activation))
+            self.edge_mlp = torch.nn.Sequential(
+                nn.Linear(bond_fdim+1+args.veceij_dim, 256),
+                nn.ReLU(),
+                nn.Linear(256, bond_fdim),
+                nn.ReLU()
+            )
+            # args.leneij_dim = args.leneij_dim if args.leneij_dim else args.num_bessel
+            self.veceij_mapper = ffn(veceij_dim.item(), args.veceij_dim, capacity=args.veceij_capacity,activation=get_activation_function(args.activation))
+            #self.leneij_mapper = ffn(args.num_bessel, args.leneij_dim,capacity=1,activation=get_activation_function(args.activation))
             self.mpn = POLYGIN(in_channels=atom_fdim,hidden_channels=args.hidden_size,num_layers=args.depth,dropout=args.gnn_dropout,  \
-                                activation=get_activation_function(args.activation),edge_hidden=bond_fdim+args.leneij_dim+args.veceij_dim,node_hidden=args.hidden_size)
+                                activation=get_activation_function(args.activation),edge_hidden=bond_fdim,node_hidden=args.hidden_size)
 
     def forward(self,
                 mol_graph: BatchMolGraph,
@@ -1245,27 +991,27 @@ class pyG_helper(nn.Module):
                batch, ptr
         """
         x, edge_index, edge_attr, b2revb_individual, batch, ptr,poses = self.mol_graph2data_layer(mol_graph) 
+        # 为edge_index增加自循环
+        #edge_index,_=add_self_loops(edge_index,num_nodes=x.size(0)) # [2,E]
         z_table = AtomicNumberTable([1, 6, 7, 8, 9]) 
-
-        if self.args.encoder_type in ["polygin", "polygin_attn", "polygin_pe"]:
-            poly_vec = self.mpn(x=x, edge_index=edge_index, edge_attr=edge_attr, batch=batch,poses=poses)
-        elif self.args.encoder_type in ['epic_coor_mace_mlp']:
+        if self.args.encoder_type in ['epic_coor_mace_mlp']:
             vectors, lengths = get_edge_vectors_and_lengths(
                 positions=poses, edge_index=edge_index,normalize=True
             )
+            '''
             leneij = self.radial_embedding(
                 lengths, x, edge_index, z_table
             )
+            '''
             veceij = self.spherical_harmonics(vectors)
             veceij = self.veceij_mapper(veceij)
-            leneij = self.leneij_mapper(leneij)
-            edge_attr = torch.cat((edge_attr,leneij,veceij),1)
-            poly_vec = self.mpn(x=x, edge_index=edge_index, edge_attr=edge_attr, batch=batch,poses=poses)
+            # leneij = self.leneij_mapper(leneij)
+            edge_attr = torch.cat((edge_attr,lengths,veceij),1)
+            edge_attr = self.edge_mlp(edge_attr)
+            poly_vec = self.mpn(x=x, edge_index=edge_index, edge_attr=edge_attr, batch=batch)
         else:
-            poly_vec = self.mpn(x=x, edge_index=edge_index, edge_attr=edge_attr,batch=batch,poses=poses)
-
+            poly_vec = self.mpn(x=x, edge_index=edge_index, edge_attr=edge_attr,batch=batch)
         poly_vec = scatter_sum(poly_vec, batch, dim=0)
-      
         return poly_vec
 
 class MPN(nn.Module):

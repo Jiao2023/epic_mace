@@ -491,8 +491,9 @@ class MolGraph :
             # Initialize f_bonds to real bonds mapping for each bond
             self.b2br = np.zeros([len(mol.GetBonds()), 2])
             # Get bond features
+            
             for a1 in range(self.n_atoms):
-                for a2 in range(a1 + 1, self.n_atoms):
+                for a2 in range(a1+1, self.n_atoms):
                     bond = mol.GetBondBetweenAtoms(a1, a2)
                     if bond is None:
                         continue
@@ -518,7 +519,7 @@ class MolGraph :
                     self.b2revb.append(b1)
                     self.b2br[bond.GetIdx(), :] = [self.n_bonds, self.n_bonds + 1]
                     self.n_bonds += 2
-
+            
             if bond_features_extra is not None and len(bond_features_extra) != self.n_bonds / 2:
                 raise ValueError(f'The number of bonds in {Chem.MolToSmiles(mol)} is different from the length of '
                                  f'the extra bond features')

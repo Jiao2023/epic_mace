@@ -41,7 +41,11 @@ def build_search_space(search_parameters: List[str], train_epochs: int = None) -
         "num_bessel": hp.quniform("num_bessel", low=1, high=10, q=1),
         "max_ell": hp.quniform("max_ell", low=1, high=5, q=1),
         "veceij_dim": hp.quniform("veceij_dim", low=1, high=20, q=1),
-        "leneij_dim": hp.quniform("leneij_dim", low=1, high=10, q=1)
+        "leneij_dim": hp.quniform("leneij_dim", low=1, high=10, q=1),
+        "veceij_capacity": hp.quniform("veceij_capacity", low=0, high=5, q=1),
+        "edge_capacity": hp.quniform("edge_capacity", low=0, high=5, q=1),
+        "residual_capacity": hp.quniform("residual_capacity", low=0, high=5, q=1)
+
     }
 
     space = {}

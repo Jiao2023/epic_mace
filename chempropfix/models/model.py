@@ -72,7 +72,6 @@ class MoleculeModel(nn.Module):
 
         self.create_encoder(args)
         self.create_ffn(args)
-        pdb.set_trace()
         initialize_weights(self,args)
 
     def create_encoder(self, args: TrainArgs) -> None:

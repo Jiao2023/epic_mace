@@ -248,6 +248,26 @@ class TrainArgs(CommonArgs):
 
     # add
     graph_cache_path = None
+    encoder_type :Literal["epic_coor_mace_mlp"] = "epic_coor_mace_mlp"
+    gnn_dropout: int = 0
+    r_max: float = 5.0
+    num_bessel: int = 5
+    num_polynomial_cutoff: int = 5
+    max_ell:int = 1
+    # help="List of atomic numbers",
+    atomic_numbers:str = None
+    # choices=["bessel", "gaussian", "chebyshev"],
+    radial_type: Optional[str] = "bessel"
+    # choices=["None", "Agnesi", "Soft"]
+    # help="use distance transform for radial basis functions",
+    distance_transform: str = "None"
+    init:Optional[str] = "xavier_normal"
+    veceij_dim =  None
+    leneij_dim = None
+    veceij_capacity=1
+    edge_capacity = 1
+    residual_capacity = 1
+
     # General arguments
     data_path: str
     """Path to data CSV file."""
@@ -499,28 +519,6 @@ class TrainArgs(CommonArgs):
     Default (False) is to use the checkpoint to freeze all encoders.
     (only relevant for number_of_molecules > 1, where checkpoint model has number_of_molecules = 1)
     """
-
-    encoder_type :Literal["polygin", "epic_coor_mace_mlp"] = "polygin"
-    gnn_dropout: int = 0
-    attn_enc_num_layers :int = 1
-    attn_enc_heads:int = 8
-    attn_enc_filter_size:int = 256
-    attn_dropout:int= 0
-    with_split:bool =False
-    r_max: float = 5.0
-    num_bessel: int = 5
-    num_polynomial_cutoff: int = 5
-    max_ell:int = 1
-    # help="List of atomic numbers",
-    atomic_numbers:str = None
-    # choices=["bessel", "gaussian", "chebyshev"],
-    radial_type: Optional[str] = "bessel"
-    # choices=["None", "Agnesi", "Soft"]
-    # help="use distance transform for radial basis functions",
-    distance_transform: str = "None"
-    init:Optional[str] = "xavier_normal"
-    veceij_dim =  None
-    leneij_dim = None
 
     def __init__(self, *args, **kwargs) -> None:
         super(TrainArgs, self).__init__(*args, **kwargs)
@@ -1103,14 +1101,16 @@ class HyperoptArgs(TrainArgs):
             "basic", "learning_rate", "linked_hidden_size", "all",
             "activation", "aggregation", "aggregation_norm", "batch_size", "depth",
             "dropout", "ffn_hidden_size", "ffn_num_layers", "final_lr", "hidden_size",
-            "init_lr", "max_lr", "warmup_epochs","attn_enc_num_layers",
-            "num_bessel", "max_ell","veceij_dim","leneij_dim"
+            "init_lr", "max_lr", "warmup_epochs",
+            "num_bessel", "max_ell","veceij_dim","leneij_dim",
+            "veceij_capacity","edge_capacity","residual_capacity"
         ]
         supported_parameters = [
             "activation", "aggregation", "aggregation_norm", "batch_size", "depth",
             "dropout", "ffn_hidden_size", "ffn_num_layers", "final_lr_ratio", "hidden_size",
-            "init_lr_ratio", "linked_hidden_size", "max_lr", "warmup_epochs","attn_enc_num_layers",
-            "num_bessel", "max_ell","veceij_dim","leneij_dim"
+            "init_lr_ratio", "linked_hidden_size", "max_lr", "warmup_epochs",
+            "num_bessel", "max_ell","veceij_dim","leneij_dim",
+            "veceij_capacity","edge_capacity","residual_capacity"
         ]
         unsupported_keywords = set(self.search_parameter_keywords) - set(supported_keywords)
         if len(unsupported_keywords) != 0:

@@ -518,7 +518,6 @@ def get_data(path: str,
     # Load data
     with open(path) as f:
         reader = csv.DictReader(f)
-        # fieldnames:所有列名
         fieldnames = reader.fieldnames
         if any([c not in fieldnames for c in smiles_columns]):
             raise ValueError(f'Data file did not contain all provided smiles columns: {smiles_columns}. Data file field names are: {fieldnames}')
@@ -528,8 +527,6 @@ def get_data(path: str,
         all_smiles, all_targets, all_atom_targets, all_bond_targets, all_rows, all_features, all_phase_features, all_constraints_data, all_raw_constraints_data, all_weights, all_gt, all_lt = [], [], [], [], [], [], [], [], [], [], [], []
         for i, row in enumerate(tqdm(reader)):
             smiles = [row[c] for c in smiles_columns]
-
-            # pdb.set_trace()
             index = [row[idx] for idx in ['index']]
             targets, atom_targets, bond_targets = [], [], []
             for column in target_columns:

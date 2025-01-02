@@ -70,7 +70,6 @@ class hidden(nn.Module):
         else:
             x = self.linear(x)
             x = self.activation(x)
-
         return x
 
 class ffn(nn.Module):
@@ -106,12 +105,7 @@ class ffn(nn.Module):
                         activation=self.activation,
                     )
                 )
-        self.reset_parameters()
 
-    def reset_parameters(self):
-        pdb.set_trace()
-        for layer in self.layers :
-            reset(layer.linear)
     
     def forward(self, x):
         """
