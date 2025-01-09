@@ -197,8 +197,8 @@ class POLYGINConv(MessagePassing):
                  **kwargs):
         kwargs.setdefault('aggr', 'add')
         super().__init__(**kwargs)
-        self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=3,activation=activation)
-        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=3,activation=activation)
+        self.edge_mapper = ffn(edge_hidden, edge_hidden,capacity=1,activation=activation)
+        self.residual_mapping = ffn(in_channels+edge_hidden, in_channels,capacity=1,activation=activation)
         self.nn = nn
         self.initial_eps = eps
         self.layer_norm = pnn.norm.LayerNorm(in_channels,1e-7,mode='node')
@@ -218,7 +218,6 @@ class POLYGINConv(MessagePassing):
       
         if isinstance(x, Tensor):
             x: OptPairTensor = (x, x)
-        
         out = self.propagate(edge_index,size=size,x=x,edge_attr=edge_attr) 
         x_r = x[1]
         if x_r is not None:
@@ -281,7 +280,7 @@ class POLYGIN(BasicGNN):
             norm=self.norm,
             norm_kwargs=self.norm_kwargs,
         )
-        return POLYGINConv(in_channels,out_channels,mlp, **kwargs)    
+        return POLYGINConv(in_channels,out_channels,mlp, **kwargs)
 
 class MPNEncoder(nn.Module):
     """An :class:`MPNEncoder` is a message passing neural network for encoding a molecule."""
@@ -965,6 +964,7 @@ class pyG_helper(nn.Module):
             self.spherical_harmonics = o3.SphericalHarmonics(
                 sh_irreps, normalize=True, normalization="component"
             )
+            # pdb.set_trace()
             ell = torch.arange(args.max_ell + 1) 
             veceij_dim = torch.sum(2 * ell + 1)  
             args.veceij_dim = args.veceij_dim if args.veceij_dim else veceij_dim.item()
@@ -994,6 +994,7 @@ class pyG_helper(nn.Module):
         # 为edge_index增加自循环
         #edge_index,_=add_self_loops(edge_index,num_nodes=x.size(0)) # [2,E]
         z_table = AtomicNumberTable([1, 6, 7, 8, 9]) 
+        # pdb.set_trace()
         if self.args.encoder_type in ['epic_coor_mace_mlp']:
             vectors, lengths = get_edge_vectors_and_lengths(
                 positions=poses, edge_index=edge_index,normalize=True

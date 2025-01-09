@@ -74,6 +74,7 @@ def cross_validate(args: TrainArgs,
     
     # Get data
     debug('Loading data')
+    # pdb.set_trace()
     data = get_data(
         path=args.data_path,
         args=args,
@@ -105,9 +106,6 @@ def cross_validate(args: TrainArgs,
     all_scores = defaultdict(list) 
     for fold_num in range(args.num_folds):
         info(f'Fold {fold_num}')
-        #args.seed = init_seed + fold_num  #init_seed不需要改变了 
-        #args.save_dir = os.path.join(save_dir, f'{args.seed}')
-        #makedirs(args.save_dir)
         data.reset_features_and_targets()
         # If resuming experiment, load results from trained models
         test_scores_path = os.path.join(args.save_dir, 'test_scores.json')

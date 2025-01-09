@@ -429,7 +429,6 @@ class MolGraph :
     * :code:`overwrite_default_atom_features`: A boolean to overwrite default atom descriptors.
     * :code:`overwrite_default_bond_features`: A boolean to overwrite default bond descriptors.
     """
-
     def __init__(self, mol: Union[str, Chem.Mol, Tuple[Chem.Mol, Chem.Mol]],
                  atom_features_extra: np.ndarray = None,
                  bond_features_extra: np.ndarray = None,
@@ -491,9 +490,8 @@ class MolGraph :
             # Initialize f_bonds to real bonds mapping for each bond
             self.b2br = np.zeros([len(mol.GetBonds()), 2])
             # Get bond features
-            
             for a1 in range(self.n_atoms):
-                for a2 in range(a1+1, self.n_atoms):
+                for a2 in range(a1 + 1, self.n_atoms):
                     bond = mol.GetBondBetweenAtoms(a1, a2)
                     if bond is None:
                         continue

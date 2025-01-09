@@ -55,6 +55,7 @@ def train(
         mol_batch, features_batch, target_batch, mask_batch, atom_descriptors_batch, atom_features_batch, bond_descriptors_batch, bond_features_batch, constraints_batch, data_weights_batch = \
             batch.batch_graph(), batch.features(), batch.targets(), batch.mask(), batch.atom_descriptors(), \
             batch.atom_features(), batch.bond_descriptors(), batch.bond_features(), batch.constraints(), batch.data_weights()
+        # pdb.set_trace()
         if model.is_atom_bond_targets:
             targets = []
             for dt in zip(*target_batch):
@@ -206,8 +207,6 @@ def train(
             else:
                 # loss_function = none
                 loss = loss_func(preds, targets) * target_weights * data_weights * masks
-
-
             if args.loss_function == "mcc":
                 loss = loss.mean()
             else:
@@ -232,7 +231,6 @@ def train(
 
         if isinstance(scheduler, NoamLR):
             scheduler.step()
-
         n_iter += len(batch) 
         # Log and/or add to tensorboard
         if (n_iter // args.batch_size) % args.log_frequency == 0:

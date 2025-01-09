@@ -102,7 +102,7 @@ def run_training(args: TrainArgs,
                                                      split_type=args.split_type,
                                                      sizes=args.split_sizes,
                                                      key_molecule_index=args.split_key_molecule,
-                                                     seed=args.pytorch_seed,
+                                                     seed=args.seed,
                                                      num_folds=args.num_folds,
                                                      args=args,
                                                      logger=logger)
@@ -233,7 +233,7 @@ def run_training(args: TrainArgs,
         num_workers=num_workers,
         class_balance=args.class_balance,
         shuffle=True,
-        seed=args.pytorch_seed
+        seed=args.seed
     )
 
     val_data_loader = MoleculeDataLoader(
@@ -301,8 +301,6 @@ def run_training(args: TrainArgs,
     
         for epoch in trange(args.epochs):
             debug(f'Epoch {epoch}')
-            # return:dataset_num
-            # 此时训练出了一个模型
             n_iter = train(
                 model=model,
                 data_loader=train_data_loader,
